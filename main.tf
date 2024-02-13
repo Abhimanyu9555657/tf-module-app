@@ -29,20 +29,36 @@ resource "aws_security_group" "main" {
   }
 }
 
-resource "aws_launch_template" "foobar" {
-  name_prefix   = "foobar"
-  image_id      = "ami-1a2b3c"
-  instance_type = "t2.micro"
+resource "aws_launch_template" "main" {
+  name                   = local.name_prefix
+  image_id               = data.aws_ami.ami.id
+  instance_type          = var.instance_type
+  vpc_security_group_ids = [aws_security_group.main.id]
+  user_data = base64encode(templatefile("${path.module}/userdata.sh",
+    {
+      component = var.component
+    }))
+  tag_specifications {
+    resource_type = "instance"
+    tags        = merge(local.tags, { Name = "${local.name_prefix}-sg" })
+  }
 }
 
-resource "aws_autoscaling_group" "bar" {
-  availability_zones = ["us-east-1a"]
-  desired_capacity   = 1
-  max_size           = 1
-  min_size           = 1
+resource "aws_autoscaling_group" "main" {
+
+  name = "${local.name_prefix}-asg"
+  vpc_zone_identifier = var.subnet_ids
+  desired_capacity   = var.desired_capacity
+  max_size           = var.max_size
+  min_size           = var.min_size
 
   launch_template {
-    id      = aws_launch_template.foobar.id
+    id      = aws_launch_template.main.id
     version = "$Latest"
+  }
+  tag {
+    key                 = "Name"
+    propagate_at_launch = local.name_prefix
+    value               = true
   }
 }
